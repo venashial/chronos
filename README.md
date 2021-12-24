@@ -18,6 +18,10 @@ Append your timezone to your nickname
 
 Remove your timezone from your nickname
 
+#### `/custom` [UTC offset]
+
+Append a custom UTC offset to your nickname
+
 ## Invite
 
 https://discord.com/oauth2/authorize?client_id=884672312010485770&scope=bot%20applications.commands&permissions=134217728

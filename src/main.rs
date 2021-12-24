@@ -65,6 +65,18 @@ impl EventHandler for Handler {
                         .name("clear")
                         .description("Remove your timezone from your nickname")
                 })
+                .create_application_command(|command| {
+                    command
+                        .name("custom")
+                        .description("Append a custom UTC offset to your nickname")
+                        .create_option(|option| {
+                            option
+                                .name("offset")
+                                .description("Your UTC offset, including +/-, like \"+1:30\" or \"-11:20\"")
+                                .kind(ApplicationCommandOptionType::String)
+                                .required(true)
+                        })
+                })
         })
             .await
             .expect("Could not create application commands");
@@ -74,11 +86,11 @@ impl EventHandler for Handler {
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::ApplicationCommand(command) = interaction {
             let content = match command.data.name.as_str() {
-                "tz" | "clear" => match &command.guild_id {
+                "tz" | "clear" | "custom" => match &command.guild_id {
                     Some(_) => {
                         let member = &command.member.as_ref().expect("Member could not be found");
 
-                        let regex = Regex::new(r" \(UTC[+\-]1?[0-9]\)$").unwrap();
+                        let regex = Regex::new(r" \(UTC[+|-](1[0-2]|[0-9])(:[0-6][0-9])?\)$").unwrap();
 
                         let current_nick = match member.nick.as_deref() {
                             Some(nick) => nick,
@@ -102,12 +114,38 @@ impl EventHandler for Handler {
 
                                 format!("{} (UTC{})", base_nick, chosen_offset)
                             },
+                            "custom" => {
+                                let chosen_offset = command
+                                    .data
+                                    .options
+                                    .get(0)
+                                    .expect("Expected command option")
+                                    .value
+                                    .as_ref()
+                                    .expect("Expected command option value")
+                                    .as_str()
+                                    .expect("Could not parse option value as string");
+
+                                let regex = Regex::new(r"^[+|-](1[0-2]|[0-9]):[0-6][0-9]$").unwrap();
+
+                                if regex.is_match(chosen_offset) {
+                                    format!("{} (UTC{})", base_nick, chosen_offset)
+                                } else {
+                                    base_nick
+                                }
+                            },
                             "clear" | _ => base_nick,
                         };
 
 
                         match current_nick == new_nick {
-                            true => "That command and option doesn't change your current nickname.".to_string(),
+                            true => {
+                                if command.data.name.as_str() == "custom" {
+                                    "Your custom UTC offset is invalid or is already the same as your current nickname.".to_string()
+                                } else {
+                                    "That command and option doesn't change your current nickname.".to_string()
+                                }
+                            },
                             false => match member
                                 .edit(&ctx.http, |member| member.nickname(&new_nick))
                                 .await {
